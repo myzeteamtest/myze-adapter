@@ -90,10 +90,15 @@ async function kvRequest(method, path, body) {
 }
 
 export async function getProducts() {
-  if (!KV_URL) return []; // Fallback wenn KV noch nicht eingerichtet
+  if (!KV_URL) return [];
   try {
     const result = await kvRequest("GET", "/get/products");
-    return result.result ? JSON.parse(result.result) : [];
+    if (!result.result) return [];
+    // Upstash kann doppelt serialisieren — beide Fälle abfangen
+    const value = result.result;
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") return JSON.parse(value);
+    return [];
   } catch {
     return [];
   }
