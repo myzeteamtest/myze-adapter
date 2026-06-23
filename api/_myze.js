@@ -70,9 +70,7 @@ export function mapSnipcartToMyze(order) {
   };
 }
 
-// ── Produktspeicher via Vercel KV ──────────────────────────────────────────
-// Vercel KV ist ein einfacher Key-Value Store (kostenlos bis 30MB).
-// Produkte werden unter dem Key "products" als JSON-Array gespeichert.
+// ── Produktspeicher via Upstash ────────────────────────────────────────────
 
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
@@ -89,16 +87,21 @@ async function kvRequest(method, path, body) {
   return res.json();
 }
 
+// Parst solange bis ein Array rauskommt (Upstash serialisiert manchmal doppelt)
+function parseUntilArray(value) {
+  let result = value;
+  while (typeof result === "string") {
+    try { result = JSON.parse(result); } catch { return []; }
+  }
+  return Array.isArray(result) ? result : [];
+}
+
 export async function getProducts() {
   if (!KV_URL) return [];
   try {
     const result = await kvRequest("GET", "/get/products");
     if (!result.result) return [];
-    // Upstash kann doppelt serialisieren — beide Fälle abfangen
-    const value = result.result;
-    if (Array.isArray(value)) return value;
-    if (typeof value === "string") return JSON.parse(value);
-    return [];
+    return parseUntilArray(result.result);
   } catch {
     return [];
   }
@@ -106,12 +109,12 @@ export async function getProducts() {
 
 export async function saveProduct(product) {
   if (!KV_URL) return;
-  const products = await getProducts();
+  const products = await getProducts(); // getProducts gibt immer ein Array zurück
   const index = products.findIndex((p) => p.id === product.id);
   if (index >= 0) {
-    products[index] = product; // Update
+    products[index] = product;
   } else {
-    products.push(product); // Neu
+    products.push(product);
   }
   await kvRequest("POST", "/set/products", JSON.stringify(products));
 }
