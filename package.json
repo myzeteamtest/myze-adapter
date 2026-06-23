@@ -1,0 +1,8 @@
+{
+  "name": "myze-teamshop-adapter",
+  "version": "1.0.0",
+  "description": "Adapter zwischen Snipcart Team-Shop und Myze API – für Vercel",
+  "engines": {
+    "node": "20.x"
+  }
+}
