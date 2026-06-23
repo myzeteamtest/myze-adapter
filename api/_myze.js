@@ -1,10 +1,7 @@
-// api/_myze.js — gemeinsame Hilfsfunktionen für alle Vercel-Funktionen
+// api/_myze.js — gemeinsame Hilfsfunktionen
 
 import crypto from "crypto";
 
-/**
- * Prüft die HMAC-Signatur eines eingehenden Myze-Webhooks.
- */
 export function verifyMyzeSignature(rawBody, signature, timestamp) {
   const secret = process.env.MYZE_WEBHOOK_SECRET;
   if (!secret) return true;
@@ -15,9 +12,6 @@ export function verifyMyzeSignature(rawBody, signature, timestamp) {
   return signature === `v1=${expected}`;
 }
 
-/**
- * Liest den raw Body aus einem Vercel-Request.
- */
 export async function getRawBody(req) {
   return new Promise((resolve, reject) => {
     let data = "";
@@ -27,9 +21,6 @@ export async function getRawBody(req) {
   });
 }
 
-/**
- * Sendet eine Bestellung an die Myze API.
- */
 export async function placeOrderInMyze(orderPayload) {
   const url = `${process.env.MYZE_API_URL}/store/${process.env.MYZE_STORE_ID}/place-order`;
   const response = await fetch(url, {
@@ -47,13 +38,8 @@ export async function placeOrderInMyze(orderPayload) {
   return response.json();
 }
 
-/**
- * Wandelt eine Snipcart-Bestellung ins Myze-Format um.
- * Die Snipcart-Produkt-ID muss die Myze-SKU sein (z.B. "TSHIRT-WHITE-L").
- */
 export function mapSnipcartToMyze(order) {
   const { token, items, shippingAddress, finalGrandTotal, paymentMethod, currency, email } = order;
-
   return {
     externalId: token,
     externalOrderNumber: token.slice(0, 8).toUpperCase(),
@@ -81,5 +67,65 @@ export function mapSnipcartToMyze(order) {
       currency: (currency || "EUR").toUpperCase(),
     },
     paymentMethod: paymentMethod || "Credit Card",
+  };
+}
+
+// ── Produktspeicher via Vercel KV ──────────────────────────────────────────
+// Vercel KV ist ein einfacher Key-Value Store (kostenlos bis 30MB).
+// Produkte werden unter dem Key "products" als JSON-Array gespeichert.
+
+const KV_URL = process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.KV_REST_API_TOKEN;
+
+async function kvRequest(method, path, body) {
+  const res = await fetch(`${KV_URL}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${KV_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
+export async function getProducts() {
+  if (!KV_URL) return []; // Fallback wenn KV noch nicht eingerichtet
+  try {
+    const result = await kvRequest("GET", "/get/products");
+    return result.result ? JSON.parse(result.result) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveProduct(product) {
+  if (!KV_URL) return;
+  const products = await getProducts();
+  const index = products.findIndex((p) => p.id === product.id);
+  if (index >= 0) {
+    products[index] = product; // Update
+  } else {
+    products.push(product); // Neu
+  }
+  await kvRequest("POST", "/set/products", JSON.stringify(products));
+}
+
+export function mapMyzeArticleToProduct(data) {
+  return {
+    id: data.articleId,
+    name: data.articleName,
+    description: data.articleDescription || "",
+    variants: (data.variants || []).map((v) => ({
+      sku: v.sku,
+      color: v.color,
+      size: v.size,
+      price: v.price.amount / 100,
+      currency: v.price.currency,
+      image:
+        v.facePreviews?.find((f) => f.faceName === "front")?.previewImageUrl ||
+        v.facePreviews?.[0]?.previewImageUrl ||
+        null,
+    })),
   };
 }

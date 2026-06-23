@@ -1,13 +1,11 @@
 // api/webhook/article-published.js
-// Vercel URL: https://myze-adapter.vercel.app/api/webhook/article-published
-// → Diese URL in Myze Custom Store Connector für ArticlePublished eintragen
+// Myze ruft diese URL auf wenn ein Artikel publiziert wird.
+// Der Artikel wird automatisch im Shop angezeigt.
 
-import { getRawBody, verifyMyzeSignature } from "../_myze.js";
+import { getRawBody, verifyMyzeSignature, mapMyzeArticleToProduct, saveProduct } from "../_myze.js";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const rawBody = await getRawBody(req);
   const signature = req.headers["x-myze-webhook-signature"];
@@ -20,25 +18,9 @@ export default async function handler(req, res) {
   const { data } = JSON.parse(rawBody);
   console.log(`[Myze] Artikel publiziert: ${data.articleName}`);
 
-  // Produktdaten für den Shop aufbereiten
-  const shopProduct = {
-    id: data.variants?.[0]?.sku || data.articleId,
-    name: data.articleName,
-    description: data.articleDescription || "",
-    variants: (data.variants || []).map((v) => ({
-      sku: v.sku,
-      color: v.color,
-      size: v.size,
-      price: v.price.amount / 100,
-      currency: v.price.currency,
-      image:
-        v.facePreviews?.find((f) => f.faceName === "front")?.previewImageUrl ||
-        v.facePreviews?.[0]?.previewImageUrl ||
-        null,
-    })),
-  };
+  const product = mapMyzeArticleToProduct(data);
+  await saveProduct(product);
 
-  console.log("[Shop] Produkt aufbereitet:", JSON.stringify(shopProduct, null, 2));
-
-  return res.status(200).json({ received: true, product: shopProduct });
+  console.log(`[Shop] Produkt gespeichert: ${product.name} (${product.variants.length} Varianten)`);
+  return res.status(200).json({ received: true, product });
 }
