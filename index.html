@@ -564,7 +564,11 @@
   // ══════════════════════════════════════════
   // PRODUCTS
   // ══════════════════════════════════════════
-  function getPrice(sku) { return PRICES[sku] || DEFAULT_PRICE; }
+  function getPrice(sku, variantPrice) {
+    if (PRICES[sku]) return PRICES[sku];
+    if (variantPrice && variantPrice > 0) return variantPrice;
+    return DEFAULT_PRICE;
+  }
 
   function fmt(amount) {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
@@ -609,7 +613,7 @@
               <div class="variant-btns" id="sizes-${p.id}"></div>
             </div>
             <div class="product-footer">
-              <span class="product-price" id="price-${p.id}">${fmt(getPrice(first?.sku))}</span>
+              <span class="product-price" id="price-${p.id}">${fmt(getPrice(first?.sku, first?.price))}</span>
               <button class="add-to-cart" disabled id="btn-${p.id}" onclick="addToCart('${p.id}')">+ Warenkorb</button>
             </div>
           </div>
@@ -656,7 +660,7 @@
     if (variant) {
       btn.disabled = false;
       btn.dataset.sku = variant.sku;
-      document.getElementById(`price-${pid}`).textContent = fmt(getPrice(variant.sku));
+      document.getElementById(`price-${pid}`).textContent = fmt(getPrice(variant.sku, variant.price));
     } else {
       btn.disabled = true;
     }
@@ -679,7 +683,7 @@
         sku: variant.sku,
         name: p.name,
         color, size,
-        price: getPrice(variant.sku),
+        price: getPrice(variant.sku, variant.price),
         image: variant.image || '',
         qty: 1
       });
