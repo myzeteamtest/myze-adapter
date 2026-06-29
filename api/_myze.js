@@ -101,7 +101,12 @@ export async function getProducts() {
   if (!KV_URL) return []; // Fallback wenn KV noch nicht eingerichtet
   try {
     const result = await kvRequest("GET", "/get/products");
-    return result.result ? JSON.parse(result.result) : [];
+    if (!result.result) return [];
+    // Upstash gibt manchmal doppelt serialisiertes JSON zurueck
+    let parsed = result.result;
+    if (typeof parsed === "string") parsed = JSON.parse(parsed);
+    if (typeof parsed === "string") parsed = JSON.parse(parsed);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }

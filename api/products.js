@@ -11,6 +11,16 @@ export default async function handler(req, res) {
 
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const products = await getProducts();
+  let products = await getProducts();
+
+  // Sicherheits-Parse: falls Upstash doppelt serialisiert hat
+  if (typeof products === "string") {
+    try { products = JSON.parse(products); } catch { products = []; }
+  }
+  if (typeof products === "string") {
+    try { products = JSON.parse(products); } catch { products = []; }
+  }
+  if (!Array.isArray(products)) products = [];
+
   return res.status(200).json(products);
 }
