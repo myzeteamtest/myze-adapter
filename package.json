@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Teamshop Adapter für Myze API",
   "engines": {
-"node": "24.x"
+    "node": "24.x"
   },
   "type": "module"
 }
