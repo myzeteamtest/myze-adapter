@@ -24,7 +24,7 @@
 //   ]
 // }
 
-import { getRawBody, mapFormToMyze, placeOrderInMyze } from "../_myze.js";
+import { getRawBody, mapFormToMyze, placeOrderInMyze } from "./_myze.js";
 
 export default async function handler(req, res) {
   // CORS-Header damit das Shop-Frontend die API aufrufen darf
