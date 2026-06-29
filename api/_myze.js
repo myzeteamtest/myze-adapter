@@ -38,24 +38,31 @@ export async function placeOrderInMyze(orderPayload) {
   return response.json();
 }
 
-export function mapSnipcartToMyze(order) {
-  const { token, items, shippingAddress, finalGrandTotal, paymentMethod, currency, email } = order;
+export function mapFormToMyze(form) {
+  const { firstName, lastName, email, phone, street, city, zip, country, items, currency } = form;
+
+  // Eindeutige externe ID generieren
+  const externalId = `SHOP-${Date.now()}`;
+
+  // Gesamtpreis berechnen aus den einzelnen Positionen
+  const totalAmount = items.reduce((sum, item) => sum + Math.round(item.unitPrice * item.quantity * 100), 0);
+
   return {
-    externalId: token,
-    externalOrderNumber: token.slice(0, 8).toUpperCase(),
+    externalId,
+    externalOrderNumber: externalId,
     recipient: {
-      recipient: shippingAddress.name,
-      company: shippingAddress.company || null,
-      street: [shippingAddress.address1, shippingAddress.address2].filter(Boolean).join(" "),
-      city: shippingAddress.city,
-      zip: shippingAddress.postalCode,
-      country: shippingAddress.country,
-      email: email,
-      phone: shippingAddress.phone || null,
-      state: shippingAddress.province || null,
+      recipient: `${firstName} ${lastName}`,
+      company: null,
+      street,
+      city,
+      zip,
+      country: country || "DE",
+      email,
+      phone: phone || null,
+      state: null,
     },
     lineItems: items.map((item) => ({
-      sku: item.id,
+      sku: item.sku,
       quantity: item.quantity,
       unitPrice: {
         amount: Math.round(item.unitPrice * 100),
@@ -63,14 +70,17 @@ export function mapSnipcartToMyze(order) {
       },
     })),
     totalPrice: {
-      amount: Math.round(finalGrandTotal * 100),
+      amount: totalAmount,
       currency: (currency || "EUR").toUpperCase(),
     },
-    paymentMethod: paymentMethod || "Credit Card",
+    // Keine Zahlung — Rechnung wird manuell über Buchhaltung gestellt
+    paymentMethod: "Invoice",
   };
 }
 
-// ── Produktspeicher via Upstash ────────────────────────────────────────────
+// ── Produktspeicher via Vercel KV ──────────────────────────────────────────
+// Vercel KV ist ein einfacher Key-Value Store (kostenlos bis 30MB).
+// Produkte werden unter dem Key "products" als JSON-Array gespeichert.
 
 const KV_URL = process.env.KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN;
@@ -87,21 +97,11 @@ async function kvRequest(method, path, body) {
   return res.json();
 }
 
-// Parst solange bis ein Array rauskommt (Upstash serialisiert manchmal doppelt)
-function parseUntilArray(value) {
-  let result = value;
-  while (typeof result === "string") {
-    try { result = JSON.parse(result); } catch { return []; }
-  }
-  return Array.isArray(result) ? result : [];
-}
-
 export async function getProducts() {
-  if (!KV_URL) return [];
+  if (!KV_URL) return []; // Fallback wenn KV noch nicht eingerichtet
   try {
     const result = await kvRequest("GET", "/get/products");
-    if (!result.result) return [];
-    return parseUntilArray(result.result);
+    return result.result ? JSON.parse(result.result) : [];
   } catch {
     return [];
   }
@@ -109,12 +109,12 @@ export async function getProducts() {
 
 export async function saveProduct(product) {
   if (!KV_URL) return;
-  const products = await getProducts(); // getProducts gibt immer ein Array zurück
+  const products = await getProducts();
   const index = products.findIndex((p) => p.id === product.id);
   if (index >= 0) {
-    products[index] = product;
+    products[index] = product; // Update
   } else {
-    products.push(product);
+    products.push(product); // Neu
   }
   await kvRequest("POST", "/set/products", JSON.stringify(products));
 }
